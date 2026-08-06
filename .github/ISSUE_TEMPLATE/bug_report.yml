@@ -1,0 +1,35 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this! No coding required — just fill in what you can.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+    validations:
+      required: true
+  - type: input
+    id: light
+    attributes:
+      label: Light model & firmware
+      placeholder: "e.g. B54 Pro, firmware 3.9.7 (shown in the Supernova app)"
+  - type: input
+    id: karoo
+    attributes:
+      label: Karoo model & software version
+      placeholder: "e.g. Karoo 3, software 1.5xx"
+  - type: input
+    id: extension-version
+    attributes:
+      label: KarooB54 version
+      placeholder: "e.g. 0.1.0"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: If you can, attach adb logcat output filtered for "B54".
+      render: shell

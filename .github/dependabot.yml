@@ -1,0 +1,32 @@
+version: 2
+
+# GitHub Packages needs authentication even for public packages (karoo-ext).
+# Add these as Dependabot secrets: Settings → Secrets and variables → Dependabot:
+#   GH_PACKAGES_USER  = your GitHub username
+#   GH_PACKAGES_TOKEN = a PAT with the read:packages scope
+registries:
+  karoo-ext-github-packages:
+    type: maven-repository
+    url: https://maven.pkg.github.com/hammerheadnav/karoo-ext
+    username: ${{secrets.GH_PACKAGES_USER}}
+    password: ${{secrets.GH_PACKAGES_TOKEN}}
+
+updates:
+  # Gradle dependencies (karoo-ext, coroutines, androidx, timber, junit, …)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    registries:
+      - karoo-ext-github-packages
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+
+  # Keep the versions of GitHub Actions used in workflows up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
