@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    displayName="@string/extension_name"
+    icon="@drawable/ic_b54"
+    id="b54"
+    scansDevices="true">
+    <DataType
+        description="@string/battery_description"
+        displayName="@string/battery_name"
+        graphical="false"
+        icon="@drawable/ic_b54"
+        typeId="battery" />
+    <DataType
+        description="@string/runtime_description"
+        displayName="@string/runtime_name"
+        graphical="false"
+        icon="@drawable/ic_b54"
+        typeId="runtime" />
+    <DataType
+        description="@string/voltage_description"
+        displayName="@string/voltage_name"
+        graphical="false"
+        icon="@drawable/ic_b54"
+        typeId="voltage" />
+    <DataType
+        description="@string/temperature_description"
+        displayName="@string/temperature_name"
+        graphical="false"
+        icon="@drawable/ic_b54"
+        typeId="temperature" />
+    <DataType
+        description="@string/cycles_description"
+        displayName="@string/cycles_name"
+        graphical="false"
+        icon="@drawable/ic_b54"
+        typeId="cycles" />
+    <BonusAction
+        displayName="@string/open_settings"
+        actionId="open" />
+</ExtensionInfo>

@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android / build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+release/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local config (never commit — contains the local SDK path)
+local.properties
+
+# Kotlin
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db

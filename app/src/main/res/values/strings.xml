@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KarooB54</string>
+    <string name="extension_name">KarooB54</string>
+
+    <string name="battery_name">B54 Battery</string>
+    <string name="battery_description">B54 charge level in percent</string>
+
+    <string name="runtime_name">B54 Runtime</string>
+    <string name="runtime_description">Remaining runtime in the active mode (minutes)</string>
+
+    <string name="voltage_name">B54 Voltage</string>
+    <string name="voltage_description">B54 battery voltage (volts)</string>
+
+    <string name="temperature_name">B54 Temperature</string>
+    <string name="temperature_description">B54 battery temperature (°C)</string>
+
+    <string name="cycles_name">B54 Cycles</string>
+    <string name="cycles_description">B54 charge cycle count</string>
+
+    <string name="open_settings">B54 Settings &amp; Permissions</string>
+    <string name="perm_needed">Please grant Bluetooth permissions so the extension can find the B54.</string>
+    <string name="perm_granted">Bluetooth permissions granted. You can now pair the B54 under Sensors.</string>
+    <string name="notif_perm_title">B54: permissions needed</string>
+    <string name="notif_perm_action">Open</string>
+</resources>
