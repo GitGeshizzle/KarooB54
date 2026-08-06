@@ -38,8 +38,8 @@ On a **Karoo 3** you can install the extension straight from your phone with the
 **Hammerhead Companion app** — no computer needed. (See Hammerhead's
 [Companion App sideloading guide](https://support.hammerhead.io/hc/en-us/articles/31576497036827-Companion-App-Sideloading).)
 
-1. **Get the APK** on your phone: open the project's releases page and the `app-release.apk`
-   (or download it to your phone's storage).
+1. **Get the APK** on your phone: open the project's **Releases** page and download the
+   latest `KarooB54-*.apk` to your phone.
 2. **Send it to the Karoo:** long-press the APK link (or open the downloaded file), choose
    **Share**, and pick the **Hammerhead Companion** app. A prompt appears on the Karoo —
    tap **Install**.
@@ -99,6 +99,14 @@ to be a developer for any of this:
 # Install directly over USB during development (enable Developer options / USB debugging
 # on the Karoo). End users should use the Companion app instead (see section 2).
 adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Releases
+Releases are automated: push a tag `vX.Y.Z` and the release workflow builds the APK and
+publishes a GitHub Release with `KarooB54-vX.Y.Z.apk` attached.
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ### How it works
