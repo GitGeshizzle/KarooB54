@@ -28,11 +28,12 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;34.0.0"
 
       - name: Test & build
-        # settings.gradle.kts reads these env vars to authenticate to GitHub Packages
-        # (karoo-ext). The built-in GITHUB_TOKEN can read public packages; if it can't,
-        # create a PAT with read:packages, store it as the secret GH_PACKAGES_TOKEN, and
-        # swap GITHUB_TOKEN below for ${{ secrets.GH_PACKAGES_TOKEN }}.
+        # settings.gradle.kts reads these env vars to authenticate to GitHub Packages for
+        # karoo-ext. The built-in GITHUB_TOKEN cannot read another org's package, so use a
+        # classic PAT with read:packages, stored as the Actions secret GH_PACKAGES_TOKEN.
+        # Note: secrets are not exposed to PRs from forks, so fork CI can't resolve
+        # karoo-ext — that's an accepted limitation of GitHub Packages.
         env:
-          GITHUB_USER: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: GitGeshizzle
+          GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
         run: ./gradlew :app:test :app:assembleDebug --no-daemon

@@ -1,14 +1,14 @@
 version: 2
 
 # GitHub Packages needs authentication even for public packages (karoo-ext).
-# Add these as Dependabot secrets: Settings → Secrets and variables → Dependabot:
-#   GH_PACKAGES_USER  = your GitHub username
-#   GH_PACKAGES_TOKEN = a PAT with the read:packages scope
+# Add ONLY the token as a Dependabot secret (Settings → Secrets and variables →
+# Dependabot): GH_PACKAGES_TOKEN = a classic PAT with the read:packages scope.
+# The username is not secret, so it is set literally below.
 registries:
   karoo-ext-github-packages:
     type: maven-repository
     url: https://maven.pkg.github.com/hammerheadnav/karoo-ext
-    username: ${{secrets.GH_PACKAGES_USER}}
+    username: GitGeshizzle
     password: ${{secrets.GH_PACKAGES_TOKEN}}
 
 updates:
