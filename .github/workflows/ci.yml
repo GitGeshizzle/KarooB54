@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;34.0.0"
+
+      - name: Test & build
+        # settings.gradle.kts reads these env vars to authenticate to GitHub Packages for
+        # karoo-ext. The built-in GITHUB_TOKEN cannot read another org's package, so use a
+        # classic PAT with read:packages, stored as the Actions secret GH_PACKAGES_TOKEN.
+        # Note: secrets are not exposed to PRs from forks, so fork CI can't resolve
+        # karoo-ext — that's an accepted limitation of GitHub Packages.
+        env:
+          GITHUB_USER: GitGeshizzle
+          GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: ./gradlew :app:test :app:assembleDebug --no-daemon
