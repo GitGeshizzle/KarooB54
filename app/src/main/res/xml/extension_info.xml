@@ -13,7 +13,7 @@
     <DataType
         description="@string/runtime_description"
         displayName="@string/runtime_name"
-        graphical="false"
+        graphical="true"
         icon="@drawable/ic_b54"
         typeId="runtime" />
     <DataType

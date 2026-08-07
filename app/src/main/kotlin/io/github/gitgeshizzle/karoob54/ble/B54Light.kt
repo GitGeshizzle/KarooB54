@@ -86,7 +86,8 @@ class B54Light(
             }
             is B54Protocol.Reading.RuntimeForMode ->
                 if (reading.modeCode == activeBeam) {
-                    listOf(dataPoint(RuntimeDataType.TYPE_ID, reading.minutes.toDouble()))
+                    // Emit as milliseconds so Karoo's native ELAPSED_TIME formatter renders it.
+                    listOf(dataPoint(RuntimeDataType.TYPE_ID, reading.minutes * 60_000.0))
                 } else {
                     emptyList()
                 }
