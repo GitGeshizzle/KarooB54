@@ -1,4 +1,4 @@
-# KarooB54
+# <img src="docs/icon.png" alt="" height="30" valign="middle"> KarooB54
 
 A Hammerhead **Karoo** extension that shows your **Supernova B54** bike-light battery as
 ride data fields — so on a long ride you can see, at a glance, what matters most: how much
