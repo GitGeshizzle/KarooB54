@@ -82,7 +82,7 @@ to be a developer for any of this:
 ## 4. Technical / Contributing
 
 ### Requirements
-- Android SDK 35 and a JDK 17 (Android Studio, or the command-line SDK + Gradle).
+- Android SDK 36 and a JDK 17 (Android Studio, or the command-line SDK + Gradle).
 - The Karoo Extension SDK (`karoo-ext`) is published on GitHub Packages, which requires
   authentication even for public packages. Put a GitHub token (a PAT with `read:packages`)
   in `~/.gradle/gradle.properties`:
