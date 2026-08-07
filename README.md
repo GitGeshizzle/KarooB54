@@ -30,6 +30,11 @@ light's settings.
 | B54 Temperature | °C | Battery temperature |
 | B54 Cycles | count | Charge cycle count |
 
+
+Probably only battery percentage and remaining light duration are really relevant, but for demonstration purposes all at once:
+
+![KarooB54 data fields on a Karoo ride screen](docs/karoo-datafields.png)
+
 ---
 
 ## 2. Installation & setup (for users)
