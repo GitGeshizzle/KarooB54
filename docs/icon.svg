@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <!-- battery body outline -->
+  <path d="M4.5,8 H10.5 A2,2 0 0 1 12.5,10 V14 A2,2 0 0 1 10.5,16 H4.5 A2,2 0 0 1 2.5,14 V10 A2,2 0 0 1 4.5,8 Z"
+        stroke="#2FBF71" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+  <!-- positive terminal -->
+  <path d="M12.5,10.7 H14 V13.3 H12.5 Z" fill="#2FBF71"/>
+  <!-- charge level (~55%) -->
+  <path d="M4.4,10 H7.7 V14 H4.4 Z" fill="#2FBF71"/>
+  <!-- light beam -->
+  <path d="M15.7,12 H20 M16.1,10.6 L19.6,8.7 M16.1,13.4 L19.6,15.3"
+        stroke="#2FBF71" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+</svg>
