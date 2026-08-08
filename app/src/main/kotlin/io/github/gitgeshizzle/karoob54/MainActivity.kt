@@ -1,6 +1,5 @@
 package io.github.gitgeshizzle.karoob54
 
-import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
@@ -21,11 +20,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
 
     private val blePermissions: Array<String>
-        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        get() = B54Permissions.required(Build.VERSION.SDK_INT).toTypedArray()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

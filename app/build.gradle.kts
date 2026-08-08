@@ -55,6 +55,12 @@ android {
     }
 
     sourceSets["main"].java.srcDirs("src/main/kotlin")
+    sourceSets["test"].java.srcDirs("src/test/kotlin")
+
+    testOptions {
+        // Robolectric needs the merged Android resources/manifest to run tests on the JVM.
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 kotlin {
@@ -70,6 +76,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("com.jakewharton.timber:timber:5.0.1")
 
-    // Pure JVM test of the protocol decoder (no device/emulator needed): ./gradlew test
+    // Pure JVM tests (decoder, event mapping, scan filter, permissions): ./gradlew test
     testImplementation("junit:junit:4.13.2")
+
+    // Robolectric runs Android-framework tests on the JVM (no device/emulator): it covers the
+    // parts that need a real Context — permission flow, Bluetooth-adapter handling.
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
