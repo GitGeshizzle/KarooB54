@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - scans for the light via the Nordic UART Service
  * - connects on demand and streams the values
  */
-class B54Extension : KarooExtension("b54", "0.1.0") {
+class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
 
     private lateinit var karooSystem: KarooSystemService
     private lateinit var bleManager: B54BleManager

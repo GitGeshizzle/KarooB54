@@ -37,11 +37,35 @@ jobs:
       - name: Rename APK to KarooB54-<tag>.apk
         run: cp app/build/outputs/apk/debug/app-debug.apk "KarooB54-${GITHUB_REF_NAME}.apk"
 
+      - name: Generate manifest.json
+        # The Karoo reads this (via MANIFEST_URL in AndroidManifest.xml) to offer updates.
+        # latestVersionCode MUST match the APK's versionCode (see app/build.gradle.kts:
+        # major*10000 + minor*100 + patch) so update detection works.
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION%%-*}"
+          VERSION_CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
+          REPO_URL="https://github.com/${GITHUB_REPOSITORY}"
+          jq -n \
+            --arg label "KarooB54" \
+            --arg packageName "io.github.gitgeshizzle.karoob54" \
+            --arg latestApkUrl "${REPO_URL}/releases/download/${TAG}/KarooB54-${TAG}.apk" \
+            --arg latestVersion "${VERSION}" \
+            --argjson latestVersionCode "${VERSION_CODE}" \
+            --arg iconUrl "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/docs/icon.png" \
+            --arg developer "GitGeshizzle" \
+            --arg description "Shows your Supernova B54 bike-light battery, remaining runtime, voltage, temperature and charge cycles as Karoo data fields over BLE (read-only)." \
+            '{label:$label, packageName:$packageName, latestApkUrl:$latestApkUrl, latestVersion:$latestVersion, latestVersionCode:$latestVersionCode, iconUrl:$iconUrl, developer:$developer, description:$description}' \
+            > manifest.json
+          cat manifest.json
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             "KarooB54-${GITHUB_REF_NAME}.apk" \
+            manifest.json \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes

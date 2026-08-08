@@ -42,10 +42,11 @@
                 android:resource="@xml/extension_info" />
         </service>
 
-        <!-- Tells the Karoo system where the app is delivered from (placeholder) -->
+        <!-- Where the Karoo checks for updates: the release workflow publishes a manifest.json
+             as a release asset, and "releases/latest/download" always resolves to the newest. -->
         <meta-data
             android:name="io.hammerhead.karooext.MANIFEST_URL"
-            android:value="https://example.com/karoob54/manifest.json" />
+            android:value="https://github.com/GitGeshizzle/KarooB54/releases/latest/download/manifest.json" />
 
     </application>
 
