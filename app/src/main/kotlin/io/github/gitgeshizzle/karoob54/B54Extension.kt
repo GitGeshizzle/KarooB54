@@ -1,11 +1,11 @@
 package io.github.gitgeshizzle.karoob54
 
-import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import io.github.gitgeshizzle.karoob54.ble.B54BleManager
 import io.github.gitgeshizzle.karoob54.ble.B54Light
+import io.github.gitgeshizzle.karoob54.ble.isB54ScanResult
 import io.github.gitgeshizzle.karoob54.data.BatteryDataType
 import io.github.gitgeshizzle.karoob54.data.CyclesDataType
 import io.github.gitgeshizzle.karoob54.data.RuntimeDataType
@@ -86,11 +86,7 @@ class B54Extension : KarooExtension("b54", "0.1.0") {
     }
 
     private fun hasScanPermission(): Boolean {
-        val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Manifest.permission.BLUETOOTH_SCAN
-        } else {
-            Manifest.permission.ACCESS_FINE_LOCATION
-        }
+        val perm = B54Permissions.scan(Build.VERSION.SDK_INT)
         return checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -101,8 +97,7 @@ class B54Extension : KarooExtension("b54", "0.1.0") {
         val job = CoroutineScope(Dispatchers.IO).launch {
             bleManager.scan().collect { s ->
                 val name = s.name
-                val isB54 = name != null && (name.startsWith("B54") || name.startsWith("sn")) ||
-                    s.serviceUuids.any { it.equals(nus, ignoreCase = true) }
+                val isB54 = isB54ScanResult(name, s.serviceUuids, nus)
                 if (isB54 && seen.add(s.address)) {
                     Timber.i("B54 detected: ${s.address} ($name)")
                     val light = devices.getOrPut(deviceUid(s.address)) { B54Light(bleManager, extension, s.address, name) }

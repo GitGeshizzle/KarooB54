@@ -98,7 +98,7 @@ to be a developer for any of this:
 
 ### Build & test
 ```bash
-./gradlew :app:test            # run the protocol decoder unit tests (pure JVM, no device)
+./gradlew :app:test            # unit + Robolectric tests (JVM, no device/emulator)
 ./gradlew :app:assembleDebug   # -> app/build/outputs/apk/debug/app-debug.apk
 
 # Install directly over USB during development (enable Developer options / USB debugging
@@ -123,12 +123,15 @@ protocol is documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 ```
 app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
   B54Extension.kt        KarooExtension service: data fields, scan, connect
+  B54Permissions.kt      SDK-dependent BLE permission selection (unit-tested)
   MainActivity.kt        Settings screen that requests BLE runtime permissions
   B54Protocol.kt         ASCII protocol decoder (unit-tested)
   ble/B54BleManager.kt   Native android.bluetooth: scan + GATT connect/notify/write
-  ble/B54Light.kt        Device: 1 Hz keepalive + decoding -> Karoo data points
+  ble/B54Light.kt        Device: 1 Hz keepalive, wires BLE events to the mapper
+  ble/B54EventMapper.kt  Decoded messages -> Karoo data points (stateful, unit-tested)
+  ble/B54ScanFilter.kt   B54 scan-match rule (unit-tested)
   data/B54DataTypes.kt   The five data-field definitions
-app/src/test/...         Protocol decoder unit tests
+app/src/test/...         JVM unit tests + Robolectric (permission flow)
 ```
 
 ### License & contributing
