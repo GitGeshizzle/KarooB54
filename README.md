@@ -108,11 +108,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### Releases
 Releases are automated: push a tag `vX.Y.Z` and the release workflow builds the APK and
-publishes a GitHub Release with `KarooB54-vX.Y.Z.apk` attached.
+publishes a GitHub Release with `KarooB54-vX.Y.Z.apk` attached. The app version
+(`versionName`/`versionCode`) is derived from the tag, so nothing needs to be bumped by hand.
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
+The release also publishes a `manifest.json` asset; the Karoo reads it (via `MANIFEST_URL`)
+to offer in-app updates when a newer release is available.
 
 ### How it works
 KarooB54 talks to the light over the Nordic UART Service using short ASCII messages, and

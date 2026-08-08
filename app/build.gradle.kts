@@ -27,6 +27,14 @@ fun semverToVersionCode(v: String): Int {
 val appVersionName: String = releaseTag ?: "0.1.0-dev"
 val appVersionCode: Int = releaseTag?.let(::semverToVersionCode) ?: 1
 
+// --- Signing ----------------------------------------------------------------
+// The release APK is signed with a keystore supplied via env vars (CI) or gradle properties
+// (local ~/.gradle/gradle.properties). When none is configured — a normal local build, or a
+// fork PR without secrets — the release build is left unsigned rather than failing. The
+// keystore and its passwords are never committed (see .gitignore).
+val releaseKeystore: String? = System.getenv("KEYSTORE_FILE")
+    ?: providers.gradleProperty("keystore.file").orNull
+
 android {
     namespace = "io.github.gitgeshizzle.karoob54"
     compileSdk = 36
@@ -39,9 +47,21 @@ android {
         versionName = appVersionName
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: providers.gradleProperty("keystore.password").orNull
+                keyAlias = System.getenv("KEY_ALIAS") ?: providers.gradleProperty("key.alias").orNull
+                keyPassword = System.getenv("KEY_PASSWORD") ?: providers.gradleProperty("key.password").orNull
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
