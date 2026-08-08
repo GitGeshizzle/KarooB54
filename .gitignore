@@ -16,6 +16,10 @@ captures/
 # Local config (never commit — contains the local SDK path)
 local.properties
 
+# Signing keystores (never commit — private signing keys)
+*.jks
+*.keystore
+
 # Kotlin
 .kotlin/
 
