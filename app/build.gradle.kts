@@ -101,5 +101,5 @@ dependencies {
 
     // Robolectric runs Android-framework tests on the JVM (no device/emulator): it covers the
     // parts that need a real Context — permission flow, Bluetooth-adapter handling.
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.robolectric:robolectric:4.16.1")
 }
