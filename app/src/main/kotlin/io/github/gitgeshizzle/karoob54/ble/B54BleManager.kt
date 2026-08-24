@@ -43,6 +43,18 @@ class B54BleManager(private val context: Context) {
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
     }
 
+    /** Commands queued from outside (e.g. automations), drained one per keepalive tick. */
+    private val outbound = java.util.concurrent.ConcurrentLinkedQueue<ByteArray>()
+
+    /**
+     * Queue an ASCII command to send to the connected light. It goes out on the next keepalive
+     * tick — one write per tick, so it never collides with the keepalive on the single-op GATT
+     * stack (latency is up to ~1 s, fine for the automations that use it).
+     */
+    fun send(command: String) {
+        outbound.add(command.toByteArray(Charsets.US_ASCII))
+    }
+
     data class Scanned(val address: String, val name: String?, val serviceUuids: List<String>, val rssi: Int)
 
     sealed interface Event {
@@ -103,6 +115,8 @@ class B54BleManager(private val context: Context) {
 
         val levelPayload = B54Protocol.REQ_LEVEL.toByteArray(Charsets.US_ASCII)
         val beamPayload = B54Protocol.REQ_BEAM.toByteArray(Charsets.US_ASCII)
+        val infoPayload = B54Protocol.REQ_INFO.toByteArray(Charsets.US_ASCII)
+        outbound.clear() // drop any commands left over from a previous connection
         // Set once the CCCD write is confirmed; gates keepalive writes so the first one can't
         // collide with the still-pending descriptor write.
         val rxCharRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
@@ -216,15 +230,24 @@ class B54BleManager(private val context: Context) {
         }
         openConnection.get()?.invoke()
 
-        // Keepalive: one read request per second (write() no-ops until rxCharRef is set, so
-        // nothing races the descriptor write). Mostly "$l" (keepalive + fresh battery); every
-        // 3rd tick "$b" instead, to refresh the active beam mode for the light-mode field.
-        // One write per tick — no back-to-back writes that could collide on the single-op stack.
+        // Keepalive: one write per second (write() no-ops until rxCharRef is set, so nothing
+        // races the descriptor write). A queued command (from send()) takes the tick; otherwise
+        // mostly "$l" (keepalive + fresh battery), with "$b" (~every 3rd tick) and "$i" (~every
+        // 6th) mixed in to refresh the beam mode and info flags. One write per tick — no
+        // back-to-back writes that could collide on the single-op stack.
         val keepalive = launch {
             var tick = 0
             while (isActive) {
                 delay(1000)
-                write(if (tick % 3 == 2) beamPayload else levelPayload)
+                val queued = outbound.poll()
+                write(
+                    when {
+                        queued != null -> queued
+                        tick % 6 == 5 -> infoPayload
+                        tick % 3 == 2 -> beamPayload
+                        else -> levelPayload
+                    },
+                )
                 tick++
             }
         }
@@ -232,6 +255,7 @@ class B54BleManager(private val context: Context) {
         awaitClose {
             active.set(false)
             keepalive.cancel()
+            outbound.clear()
             gattRef.getAndSet(null)?.close()
         }
     }

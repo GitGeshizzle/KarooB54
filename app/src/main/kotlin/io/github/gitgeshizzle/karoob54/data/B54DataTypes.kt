@@ -103,7 +103,7 @@ class LightModeDataType(extension: String) : DataTypeImpl(extension, TYPE_ID) {
     }
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
-        emitter.onNext(UpdateGraphicConfig(showHeader = false))
+        emitter.onNext(UpdateGraphicConfig(showHeader = true))
         val night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
         val textColor = if (night) Color.WHITE else Color.BLACK

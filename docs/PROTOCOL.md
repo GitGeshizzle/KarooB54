@@ -61,11 +61,17 @@ whose mode matches the current `$B`.
    `autoConnect = true` provides. Send the first keepalive only after the CCCD write is
    confirmed, so it can't collide with the pending descriptor write.
 
-## Other commands (control — not needed for battery display)
+## Control commands
 
-- Beam: `$B0` off, `$B1` LB-Eco, `$B2` LB-Std, `$B3` HB-Eco, `$B4` HB-Std, `$B5` HB-Power,
+- Set beam: `$B0` off, `$B1` LB-Eco, `$B2` LB-Std, `$B3` HB-Eco, `$B4` HB-Std, `$B5` HB-Power,
   `$B6` DRL/TFL. MAX modes: `$BA…$BC` (LB1-3), `$BH…$BL` (HB1-5).
-- **Do not send** these — they change device state or firmware: `$*` (reboot),
+- Set info flags: `$I<5 chars>` — `longlife`, `cominghome`, `hibernate`, `bodyguard`,
+  `tunnel` (uppercase = on). The **tunnel** flag (index 4) is the light's native ambient
+  **autolight**. Read the current flags with `$i` first and flip only the wanted char so the
+  others are preserved.
+- **Never send** these — they change device state or firmware: `$*` (reboot),
   `$=` (recalibrate), `$#XX` (firmware update), `$!` (test).
 
-This extension only ever sends the read-only requests above (primarily `$l`).
+The extension is read-only by default. The only writes it ever makes are `$B` (set beam) and
+`$I` (set info flags), and only to fulfil a user-enabled automation — pause dimming and
+ambient autolight respectively.

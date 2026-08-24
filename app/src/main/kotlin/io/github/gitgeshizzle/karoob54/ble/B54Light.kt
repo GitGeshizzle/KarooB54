@@ -2,6 +2,7 @@ package io.github.gitgeshizzle.karoob54.ble
 
 import io.github.gitgeshizzle.karoob54.data.BatteryDataType
 import io.github.gitgeshizzle.karoob54.data.CyclesDataType
+import io.github.gitgeshizzle.karoob54.data.LightInfoState
 import io.github.gitgeshizzle.karoob54.data.LightModeDataType
 import io.github.gitgeshizzle.karoob54.data.LightModeState
 import io.github.gitgeshizzle.karoob54.data.RuntimeDataType
@@ -48,9 +49,12 @@ class B54Light(
     )
 
     /** Decodes incoming messages into data-field events (holds the beam-mode state). */
-    private val eventMapper = B54EventMapper(extension, source.uid) { code ->
-        LightModeState.set(code)
-    }
+    private val eventMapper = B54EventMapper(
+        extension,
+        source.uid,
+        onBeamMode = { LightModeState.set(it) },
+        onInfo = { LightInfoState.set(it) },
+    )
 
     fun connect(emitter: Emitter<DeviceEvent>) {
         val job = scope.launch {
@@ -59,7 +63,9 @@ class B54Light(
                     is B54BleManager.Event.Connected ->
                         emitter.onNext(OnConnectionStatus(ConnectionStatus.CONNECTED))
                     is B54BleManager.Event.Disconnected -> {
-                        LightModeState.set(null) // clear the light-mode field until reconnected
+                        // Clear cached light state until reconnected.
+                        LightModeState.set(null)
+                        LightInfoState.set(null)
                         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
                     }
                     is B54BleManager.Event.Message ->

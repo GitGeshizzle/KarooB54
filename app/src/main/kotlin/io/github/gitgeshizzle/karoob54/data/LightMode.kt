@@ -47,6 +47,16 @@ object LightMode {
 
     /** A stable numeric value for the stream, so Karoo marks the field live. */
     fun index(code: String?): Double = (code?.firstOrNull()?.code ?: 0).toDouble()
+
+    /** The lowest on-stage the pause automation dims to (LO·ECO). */
+    const val LOWEST_ON = "1"
+
+    // Modes brighter than [LOWEST_ON]: the standard high stages and the adaptive MAX steps.
+    // Off ("0"), DRL ("6") and LO·ECO ("1") itself are already at/below lowest, so not dimmed.
+    private val DIMMABLE = setOf("2", "3", "4", "5", "A", "B", "C", "H", "I", "J", "K", "L")
+
+    /** Whether the pause automation should dim from [code] (i.e. it is brighter than lowest). */
+    fun isDimmable(code: String?): Boolean = code?.uppercase() in DIMMABLE
 }
 
 /** App-wide holder for the active beam code: written by the BLE layer, read by the field. */
@@ -56,5 +66,15 @@ object LightModeState {
 
     fun set(code: String?) {
         _code.value = code
+    }
+}
+
+/** App-wide holder for the light's 5-char info flags (null until first read / on disconnect). */
+object LightInfoState {
+    private val _flags = MutableStateFlow<String?>(null)
+    val flags: StateFlow<String?> = _flags.asStateFlow()
+
+    fun set(flags: String?) {
+        _flags.value = flags
     }
 }

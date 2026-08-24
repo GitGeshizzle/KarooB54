@@ -1,6 +1,8 @@
 package io.github.gitgeshizzle.karoob54.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Unit-tests the beam-code -> compact label mapping used by the light-mode field. */
@@ -36,5 +38,18 @@ class LightModeTest {
         // Standby/charge states we deliberately don't alias — surfaced raw for a first ride.
         assertEquals("R", LightMode.label("r"))
         assertEquals("S", LightMode.label("s"))
+    }
+
+    @Test
+    fun dimmable_only_for_modes_brighter_than_lowest() {
+        // Brighter presets and MAX steps -> dim on pause.
+        assertTrue(LightMode.isDimmable("2"))
+        assertTrue(LightMode.isDimmable("5"))
+        assertTrue(LightMode.isDimmable("H"))
+        // Off, DRL and the lowest on-stage itself are left alone.
+        assertFalse(LightMode.isDimmable("0"))
+        assertFalse(LightMode.isDimmable("6"))
+        assertFalse(LightMode.isDimmable(LightMode.LOWEST_ON))
+        assertFalse(LightMode.isDimmable(null))
     }
 }
