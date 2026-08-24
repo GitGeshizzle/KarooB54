@@ -38,6 +38,8 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
 
     private lateinit var karooSystem: KarooSystemService
     private lateinit var bleManager: B54BleManager
+    private lateinit var settings: B54Settings
+    private var automation: LightAutomation? = null
     private var serviceJob: Job? = null
     private val devices = ConcurrentHashMap<String, B54Light>()
 
@@ -45,10 +47,10 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
         listOf(
             BatteryDataType(extension),
             RuntimeDataType(extension),
+            LightModeDataType(extension),
             VoltageDataType(extension),
             TemperatureDataType(extension),
             CyclesDataType(extension),
-            LightModeDataType(extension),
         )
     }
 
@@ -57,12 +59,17 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
         if (BuildConfig.DEBUG && Timber.treeCount == 0) Timber.plant(Timber.DebugTree())
         karooSystem = KarooSystemService(applicationContext)
         bleManager = B54BleManager(applicationContext)
+        settings = B54Settings(applicationContext)
         serviceJob = CoroutineScope(Dispatchers.IO).launch {
             karooSystem.connect { connected ->
                 if (connected) {
                     Timber.i("Connected to Karoo system — requesting Bluetooth")
                     // Allows the extension to use BLE
                     karooSystem.dispatch(RequestBluetooth(extension))
+                    // Ride-state / autolight automations (consume events once connected)
+                    if (automation == null) {
+                        automation = LightAutomation(karooSystem, bleManager, settings).also { it.start() }
+                    }
                     // Without BLE runtime permissions the scan finds nothing -> notify the user
                     if (!hasScanPermission()) {
                         karooSystem.dispatch(
@@ -117,6 +124,8 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
     }
 
     override fun onDestroy() {
+        automation?.stop()
+        automation = null
         serviceJob?.cancel()
         serviceJob = null
         if (::karooSystem.isInitialized) {

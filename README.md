@@ -17,8 +17,9 @@ The Karoo has no built-in support for this light. KarooB54 connects to it over B
 Low Energy and exposes its battery and related values to the Karoo's data-field system, so
 you can put them on your ride screens.
 
-Communication is **read-only** — the extension only reads status and never changes the
-light's settings.
+By default communication is **read-only** — the extension just reads status. It never
+changes the light unless you turn on one of the optional automations (see **Light control**
+below).
 
 **Data fields:**
 
@@ -26,12 +27,29 @@ light's settings.
 |---|---|---|
 | B54 Battery | % | Charge level |
 | B54 Runtime | min | Remaining runtime in the active beam mode |
+| B54 Light Mode | — | Active beam mode as a compact label (`LO·STD`, `HI·PWR`, `DAY`, …) |
 | B54 Voltage | V | Battery voltage |
 | B54 Temperature | °C | Battery temperature |
 | B54 Cycles | count | Charge cycle count |
 
+The top three — **battery %**, **remaining runtime** and **light mode** — are the ones most
+worth putting on a ride screen; the rest are there if you want them.
 
-Probably only battery percentage and remaining light duration are really relevant, but for demonstration purposes all at once:
+**Light Mode labels:**
+
+| Label | Meaning |
+|---|---|
+| `OFF` | Light off |
+| `DAY` | Daytime running light |
+| `LO·ECO` / `LO·STD` | Low beam — eco / standard |
+| `HI·ECO` / `HI·STD` / `HI·PWR` | High beam — eco / standard / power |
+| `LO·M1`…`LO·M3` | Low beam, adaptive (MAX) brightness steps 1–3 |
+| `HI·M1`…`HI·M5` | High beam, adaptive (MAX) brightness steps 1–5 |
+
+(The adaptive `M` steps only appear if your light uses that mode; otherwise you just see the
+fixed presets above.)
+
+Here all fields are shown at once for demonstration:
 
 ![KarooB54 data fields on a Karoo ride screen](docs/karoo-datafields.png)
 
@@ -58,7 +76,7 @@ On a **Karoo 3** you can install the extension straight from your phone with the
    to a phone. On the Karoo go to **Sensors → Add sensor → Extensions** and select it when
    it appears as `B54 …`.
 6. **Add data fields:** edit a ride profile and add **B54 Battery** (and any of the other
-   fields) from the extension's category.
+   fields, e.g. **B54 Light Mode**) from the extension's category.
 
 **Tips**
 - The light only advertises for a short window after you wake it — press its button a few
@@ -67,7 +85,25 @@ On a **Karoo 3** you can install the extension straight from your phone with the
 
 ---
 
-## 3. Feedback & feature requests
+## 3. Light control (optional)
+
+By default the extension never changes the light. Two independent automations can be turned
+on in the **"B54 Settings & Permissions"** screen; each stays off until you enable it.
+
+- **Dim while paused:** when the ride pauses (including auto-pause at a stop), the light
+  drops to its lowest on-stage to save battery and avoid dazzling anyone; when you resume,
+  the previous mode is restored. Off, daytime running light, and the lowest stage are left
+  as they are.
+- **Ambient autolight:** keeps the light's own built-in ambient-sensor mode switched on, so
+  it brightens automatically in the dark. This just toggles the light's native feature.
+
+With both off, the extension is fully read-only.
+
+![KarooB54 settings screen with the two automation toggles](docs/karoo-settings.png)
+
+---
+
+## 4. Feedback & feature requests
 
 I'd genuinely love to hear from you — whether it just works (especially with a different
 B54 firmware or a different Karoo), or whether something is off or missing. You don't need
@@ -84,7 +120,7 @@ to be a developer for any of this:
 
 ---
 
-## 4. Technical / Contributing
+## 5. Technical / Contributing
 
 ### Requirements
 - Android SDK 36 and a JDK 17 (Android Studio, or the command-line SDK + Gradle).
@@ -119,22 +155,27 @@ to offer in-app updates when a newer release is available.
 
 ### How it works
 KarooB54 talks to the light over the Nordic UART Service using short ASCII messages, and
-reads the battery level once per second (which also keeps the connection alive). The
-protocol is documented in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+reads the battery level once per second (which also keeps the connection alive), mixing in
+beam-mode and info-flag reads. When an automation is enabled it also sends the two control
+writes (set beam / set info). The protocol is documented in
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
 ### Project structure
 ```
 app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
-  B54Extension.kt        KarooExtension service: data fields, scan, connect
+  B54Extension.kt        KarooExtension service: data fields, scan, connect, automations
   B54Permissions.kt      SDK-dependent BLE permission selection (unit-tested)
-  MainActivity.kt        Settings screen that requests BLE runtime permissions
-  B54Protocol.kt         ASCII protocol decoder (unit-tested)
+  B54Settings.kt         Persisted automation toggles (shared with the service)
+  MainActivity.kt        Settings screen: BLE permissions + automation toggles
+  LightAutomation.kt     Pause-dim and ambient-autolight automations
+  B54Protocol.kt         ASCII protocol decoder + command builders (unit-tested)
   ble/B54BleManager.kt   Native android.bluetooth: scan, direct GATT connect, notify,
-                         1 Hz keepalive, active reconnect on drop
+                         1 Hz keepalive, active reconnect on drop, command sending
   ble/B54Light.kt        Device: wires BLE events to the mapper
   ble/B54EventMapper.kt  Decoded messages -> Karoo data points (stateful, unit-tested)
   ble/B54ScanFilter.kt   B54 scan-match rule (unit-tested)
-  data/B54DataTypes.kt   The five data-field definitions
+  data/B54DataTypes.kt   The six data-field definitions
+  data/LightMode.kt      Beam-mode labels + shared light state (unit-tested)
 app/src/test/...         JVM unit tests + Robolectric (permission flow)
 ```
 
@@ -142,5 +183,5 @@ app/src/test/...         JVM unit tests + Robolectric (permission flow)
 
 Licensed under the **MIT License** — see [LICENSE](LICENSE). Fork it, change it, and use
 it for anything (commercial or not). Code contributions are very welcome — open a pull
-request (for feedback and feature requests, see section 3). If you fork or build on this, a
+request (for feedback and feature requests, see section 4). If you fork or build on this, a
 link back to the source repository is appreciated.

@@ -21,6 +21,12 @@
     <string name="lightmode_name">B54 Light Mode</string>
     <string name="lightmode_description">Active beam mode (e.g. LO·STD, HI·PWR, DAY)</string>
 
+    <string name="settings_automation_title">Light automation</string>
+    <string name="settings_pause_dim_title">Dim while paused</string>
+    <string name="settings_pause_dim_summary">Drop the light to its lowest on-stage while the ride is paused, and restore the previous mode when you resume.</string>
+    <string name="settings_autolight_title">Ambient autolight</string>
+    <string name="settings_autolight_summary">Keep the light\'s built-in ambient sensor mode on, so it brightens automatically in the dark.</string>
+
     <string name="open_settings">B54 Settings &amp; Permissions</string>
     <string name="perm_needed">Please grant Bluetooth permissions so the extension can find the B54.</string>
     <string name="perm_granted">Bluetooth permissions granted. You can now pair the B54 under Sensors.</string>

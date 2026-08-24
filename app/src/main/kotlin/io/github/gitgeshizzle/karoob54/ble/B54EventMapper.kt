@@ -26,6 +26,8 @@ class B54EventMapper(
     private val sourceId: String,
     /** Invoked with the active beam code whenever a "$B" reply is decoded (default no-op). */
     private val onBeamMode: (String) -> Unit = {},
+    /** Invoked with the 5-char info flags whenever a "$I" reply is decoded (default no-op). */
+    private val onInfo: (String) -> Unit = {},
 ) {
 
     /** Last reported active beam mode — decides which $S value is the remaining runtime. */
@@ -44,6 +46,10 @@ class B54EventMapper(
             is B54Protocol.Reading.BeamMode -> {
                 activeBeam = reading.code
                 onBeamMode(reading.code)
+                emptyList()
+            }
+            is B54Protocol.Reading.Info -> {
+                onInfo(reading.flags)
                 emptyList()
             }
             is B54Protocol.Reading.RuntimeForMode ->
