@@ -6,8 +6,9 @@ package io.github.gitgeshizzle.karoob54
  * Framing: "$" + 1 letter; lowercase = request (host -> light),
  * UPPERCASE = reply (light -> host). Payloads are ASCII digits.
  *
- * SAFETY: only read requests are ever used. Never $B* (beam), $T* (time),
- * $* (reboot), $= (recalibrate), $#XX (firmware), $! (test).
+ * SAFETY: only lowercase READ requests are ever sent (e.g. $l level, $b beam). Never an
+ * UPPERCASE set/control command: $B (set beam), $T (time), $* (reboot), $= (recalibrate),
+ * $#XX (firmware), $! (test).
  */
 object B54Protocol {
     // Nordic UART Service
@@ -17,6 +18,9 @@ object B54Protocol {
 
     /** Read request for the battery level. Doubles as the 1 s keepalive. */
     const val REQ_LEVEL = "\$l"
+
+    /** Read request for the active beam mode (reply "$B<code>"). Read-only, safe. */
+    const val REQ_BEAM = "\$b"
 
     const val FULL_LEVEL = 25600 // equals 100 %
 

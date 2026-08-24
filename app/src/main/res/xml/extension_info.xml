@@ -34,6 +34,12 @@
         graphical="false"
         icon="@drawable/ic_b54"
         typeId="cycles" />
+    <DataType
+        description="@string/lightmode_description"
+        displayName="@string/lightmode_name"
+        graphical="true"
+        icon="@drawable/ic_b54"
+        typeId="lightmode" />
     <BonusAction
         displayName="@string/open_settings"
         actionId="open" />
