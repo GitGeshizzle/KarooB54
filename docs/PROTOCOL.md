@@ -9,7 +9,7 @@ exchanges short **ASCII** messages.
 | Role | UUID | Access |
 |---|---|---|
 | Service (NUS) | `6e400001-b5a3-f393-e0a9-e50e24dcca9e` | — |
-| **RX** (host → light, commands) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` | Write (no response) |
+| **RX** (host → light, commands) | `6e400002-b5a3-f393-e0a9-e50e24dcca9e` | Write (we use write-with-response) |
 | **TX** (light → host, data) | `6e400003-b5a3-f393-e0a9-e50e24dcca9e` | Notify |
 | CCCD (enable notifications) | `00002902-0000-1000-8000-00805f9b34fb` | Write `01 00` |
 
@@ -53,8 +53,13 @@ whose mode matches the current `$B`.
    full status burst on its own (battery, voltage, all `$S` runtimes, `$B`, `$Q`, …).
 2. **Keepalive:** the light disconnects a client that sends nothing for ~1–2 s. Writing
    `$l` once per second keeps the connection alive and yields a continuous `$L` stream.
-3. The light drops the link easily; connecting with `autoConnect = true` plus the 1 Hz
-   keepalive gives stable auto-reconnect.
+   Send it **with response** — a busy stack can silently drop write-no-response, which
+   starves the keepalive and trips the watchdog.
+3. The light drops the link easily. Use **direct connect** (`autoConnect = false`, for
+   aggressive connection parameters) and **reconnect actively** on every drop (re-issue the
+   connect after a short backoff) rather than relying on the OS auto-reconnect that
+   `autoConnect = true` provides. Send the first keepalive only after the CCCD write is
+   confirmed, so it can't collide with the pending descriptor write.
 
 ## Other commands (control — not needed for battery display)
 

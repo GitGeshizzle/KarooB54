@@ -28,6 +28,13 @@ import java.util.UUID
  * The B54 advertises its name and the NUS service UUID in the scan response, so we scan
  * without a hardware service-UUID filter and match in software. GATT connect, notify on
  * TX, and a 1 s keepalive write on RX. Only read requests ($l) — see [B54Protocol].
+ *
+ * Connection handling is tuned for the B54, which drops the link readily where a relaxed
+ * autoConnect = true is used: direct connect (autoConnect = false) for aggressive connection
+ * parameters, an explicit re-connect on every drop rather than trusting the OS auto-reconnect,
+ * keepalive writes *with response* so a busy stack can't silently drop them, and the first
+ * keepalive only after the CCCD write is confirmed (avoids colliding with the still-pending
+ * descriptor write — Android allows a single outstanding GATT op).
  */
 @SuppressLint("MissingPermission")
 class B54BleManager(private val context: Context) {
@@ -79,8 +86,12 @@ class B54BleManager(private val context: Context) {
 
     /**
      * Connects to [address], enables TX notifications, sends "$l" once per second
-     * (keepalive) and emits incoming messages as [Event.Message]. autoConnect = true lets
-     * the stack reconnect automatically when the (frequently disconnecting) B54 returns.
+     * (keepalive) and emits incoming messages as [Event.Message].
+     *
+     * Uses autoConnect = false (direct connect) for aggressive connection parameters, and
+     * reconnects itself on every drop with a short backoff — the B54's watchdog drops any
+     * client that goes quiet, so a fast, self-driven reconnect keeps the field usable across
+     * the frequent disconnects.
      */
     fun connect(address: String): Flow<Event> = callbackFlow {
         val device = adapter?.getRemoteDevice(address)
@@ -90,7 +101,35 @@ class B54BleManager(private val context: Context) {
             return@callbackFlow
         }
 
+        val payload = B54Protocol.REQ_LEVEL.toByteArray(Charsets.US_ASCII)
+        // Set once the CCCD write is confirmed; gates keepalive writes so the first one can't
+        // collide with the still-pending descriptor write.
         val rxCharRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
+        // Discovered in onServicesDiscovered, promoted to rxCharRef in onDescriptorWrite.
+        val pendingRxRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
+        val gattRef = java.util.concurrent.atomic.AtomicReference<BluetoothGatt?>(null)
+        val active = java.util.concurrent.atomic.AtomicBoolean(true)
+        val attempt = java.util.concurrent.atomic.AtomicInteger(0)
+
+        // Write "$l" WITH response: a busy stack can't silently drop it (unlike no-response).
+        fun writeLevel(): Boolean {
+            val gatt = gattRef.get() ?: return false
+            val rx = rxCharRef.get() ?: return false
+            return try {
+                @Suppress("DEPRECATION")
+                rx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                rx.value = payload
+                @Suppress("DEPRECATION")
+                gatt.writeCharacteristic(rx)
+            } catch (e: Exception) {
+                Timber.w(e, "Keepalive write failed")
+                false
+            }
+        }
+
+        // Forward-declared so onConnectionStateChange can trigger a reconnect.
+        val openConnection = java.util.concurrent.atomic.AtomicReference<() -> Unit>(null)
 
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -98,9 +137,20 @@ class B54BleManager(private val context: Context) {
                     Timber.i("GATT connected, discovering services")
                     gatt.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    Timber.i("GATT disconnected")
+                    Timber.i("GATT disconnected (status=$status)")
                     rxCharRef.set(null)
+                    pendingRxRef.set(null)
+                    gatt.close()
+                    gattRef.compareAndSet(gatt, null)
                     trySend(Event.Disconnected)
+                    if (active.get()) {
+                        val n = attempt.getAndIncrement()
+                        val backoff = minOf(1000L shl n.coerceAtMost(3), 8000L) // 1,2,4,8s cap
+                        launch {
+                            delay(backoff)
+                            if (active.get()) openConnection.get()?.invoke()
+                        }
+                    }
                 }
             }
 
@@ -110,18 +160,33 @@ class B54BleManager(private val context: Context) {
                     Timber.w("NUS service not found")
                     return
                 }
-                rxCharRef.set(service.getCharacteristic(NUS_RX))
+                val rx = service.getCharacteristic(NUS_RX)
+                pendingRxRef.set(rx)
                 val tx = service.getCharacteristic(NUS_TX)
-                if (tx != null) {
+                val cccd = tx?.getDescriptor(CCCD)
+                if (tx != null && cccd != null) {
                     gatt.setCharacteristicNotification(tx, true)
-                    tx.getDescriptor(CCCD)?.let { cccd ->
-                        @Suppress("DEPRECATION")
-                        cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        @Suppress("DEPRECATION")
-                        gatt.writeDescriptor(cccd)
-                    }
+                    @Suppress("DEPRECATION")
+                    cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(cccd)
+                    // Connected/keepalive proceed from onDescriptorWrite once CCCD is confirmed.
+                } else {
+                    // No notify path — publish RX and report connected right away.
+                    Timber.w("TX/CCCD missing, connecting without notify")
+                    attempt.set(0)
+                    rxCharRef.set(rx)
+                    trySend(Event.Connected)
                 }
-                trySend(Event.Connected)
+            }
+
+            override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+                if (descriptor.uuid == CCCD) {
+                    attempt.set(0)
+                    rxCharRef.set(pendingRxRef.get())
+                    trySend(Event.Connected)
+                    writeLevel() // first keepalive, now that no descriptor write is pending
+                }
             }
 
             // API < 33
@@ -143,32 +208,25 @@ class B54BleManager(private val context: Context) {
             }
         }
 
-        val gatt = device.connectGatt(context, true, gattCallback)
+        openConnection.set {
+            gattRef.getAndSet(null)?.close()
+            gattRef.set(device.connectGatt(context, false, gattCallback))
+        }
+        openConnection.get()?.invoke()
 
-        // Keepalive: while connected, write "$l" once per second.
+        // Keepalive: while connected, write "$l" once per second. writeLevel() no-ops until
+        // rxCharRef is set (CCCD confirmed), so nothing races the descriptor write.
         val keepalive = launch {
-            val payload = B54Protocol.REQ_LEVEL.toByteArray(Charsets.US_ASCII)
             while (isActive) {
-                val rx = rxCharRef.get()
-                if (rx != null) {
-                    try {
-                        @Suppress("DEPRECATION")
-                        rx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-                        @Suppress("DEPRECATION")
-                        rx.value = payload
-                        @Suppress("DEPRECATION")
-                        gatt.writeCharacteristic(rx)
-                    } catch (e: Exception) {
-                        Timber.w(e, "Keepalive write failed")
-                    }
-                }
                 delay(1000)
+                writeLevel()
             }
         }
 
         awaitClose {
+            active.set(false)
             keepalive.cancel()
-            gatt.close()
+            gattRef.getAndSet(null)?.close()
         }
     }
 

@@ -129,8 +129,9 @@ app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
   B54Permissions.kt      SDK-dependent BLE permission selection (unit-tested)
   MainActivity.kt        Settings screen that requests BLE runtime permissions
   B54Protocol.kt         ASCII protocol decoder (unit-tested)
-  ble/B54BleManager.kt   Native android.bluetooth: scan + GATT connect/notify/write
-  ble/B54Light.kt        Device: 1 Hz keepalive, wires BLE events to the mapper
+  ble/B54BleManager.kt   Native android.bluetooth: scan, direct GATT connect, notify,
+                         1 Hz keepalive, active reconnect on drop
+  ble/B54Light.kt        Device: wires BLE events to the mapper
   ble/B54EventMapper.kt  Decoded messages -> Karoo data points (stateful, unit-tested)
   ble/B54ScanFilter.kt   B54 scan-match rule (unit-tested)
   data/B54DataTypes.kt   The five data-field definitions
