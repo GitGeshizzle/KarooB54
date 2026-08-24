@@ -21,7 +21,12 @@ import kotlin.math.roundToInt
  * emitted when it refers to the currently active mode. Pure logic (no BLE, no Android
  * framework) so the mapping can be unit-tested on the JVM — see B54EventMapperTest.
  */
-class B54EventMapper(private val extension: String, private val sourceId: String) {
+class B54EventMapper(
+    private val extension: String,
+    private val sourceId: String,
+    /** Invoked with the active beam code whenever a "$B" reply is decoded (default no-op). */
+    private val onBeamMode: (String) -> Unit = {},
+) {
 
     /** Last reported active beam mode — decides which $S value is the remaining runtime. */
     private var activeBeam: String? = null
@@ -38,6 +43,7 @@ class B54EventMapper(private val extension: String, private val sourceId: String
             }
             is B54Protocol.Reading.BeamMode -> {
                 activeBeam = reading.code
+                onBeamMode(reading.code)
                 emptyList()
             }
             is B54Protocol.Reading.RuntimeForMode ->

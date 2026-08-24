@@ -2,6 +2,8 @@ package io.github.gitgeshizzle.karoob54.ble
 
 import io.github.gitgeshizzle.karoob54.data.BatteryDataType
 import io.github.gitgeshizzle.karoob54.data.CyclesDataType
+import io.github.gitgeshizzle.karoob54.data.LightModeDataType
+import io.github.gitgeshizzle.karoob54.data.LightModeState
 import io.github.gitgeshizzle.karoob54.data.RuntimeDataType
 import io.github.gitgeshizzle.karoob54.data.TemperatureDataType
 import io.github.gitgeshizzle.karoob54.data.VoltageDataType
@@ -40,12 +42,15 @@ class B54Light(
             DataType.dataTypeId(extension, VoltageDataType.TYPE_ID),
             DataType.dataTypeId(extension, TemperatureDataType.TYPE_ID),
             DataType.dataTypeId(extension, CyclesDataType.TYPE_ID),
+            DataType.dataTypeId(extension, LightModeDataType.TYPE_ID),
         ),
         "B54 ${name ?: address.takeLast(5)}",
     )
 
     /** Decodes incoming messages into data-field events (holds the beam-mode state). */
-    private val eventMapper = B54EventMapper(extension, source.uid)
+    private val eventMapper = B54EventMapper(extension, source.uid) { code ->
+        LightModeState.set(code)
+    }
 
     fun connect(emitter: Emitter<DeviceEvent>) {
         val job = scope.launch {
@@ -53,8 +58,10 @@ class B54Light(
                 when (event) {
                     is B54BleManager.Event.Connected ->
                         emitter.onNext(OnConnectionStatus(ConnectionStatus.CONNECTED))
-                    is B54BleManager.Event.Disconnected ->
+                    is B54BleManager.Event.Disconnected -> {
+                        LightModeState.set(null) // clear the light-mode field until reconnected
                         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
+                    }
                     is B54BleManager.Event.Message ->
                         eventMapper.map(event.text).forEach { emitter.onNext(it) }
                 }

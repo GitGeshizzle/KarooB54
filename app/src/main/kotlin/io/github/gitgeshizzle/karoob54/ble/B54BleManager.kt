@@ -101,7 +101,8 @@ class B54BleManager(private val context: Context) {
             return@callbackFlow
         }
 
-        val payload = B54Protocol.REQ_LEVEL.toByteArray(Charsets.US_ASCII)
+        val levelPayload = B54Protocol.REQ_LEVEL.toByteArray(Charsets.US_ASCII)
+        val beamPayload = B54Protocol.REQ_BEAM.toByteArray(Charsets.US_ASCII)
         // Set once the CCCD write is confirmed; gates keepalive writes so the first one can't
         // collide with the still-pending descriptor write.
         val rxCharRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
@@ -111,19 +112,20 @@ class B54BleManager(private val context: Context) {
         val active = java.util.concurrent.atomic.AtomicBoolean(true)
         val attempt = java.util.concurrent.atomic.AtomicInteger(0)
 
-        // Write "$l" WITH response: a busy stack can't silently drop it (unlike no-response).
-        fun writeLevel(): Boolean {
+        // Write a read request WITH response: a busy stack can't silently drop it (unlike
+        // no-response). All payloads are read requests ($l, $b) — never a set/control command.
+        fun write(bytes: ByteArray): Boolean {
             val gatt = gattRef.get() ?: return false
             val rx = rxCharRef.get() ?: return false
             return try {
                 @Suppress("DEPRECATION")
                 rx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                 @Suppress("DEPRECATION")
-                rx.value = payload
+                rx.value = bytes
                 @Suppress("DEPRECATION")
                 gatt.writeCharacteristic(rx)
             } catch (e: Exception) {
-                Timber.w(e, "Keepalive write failed")
+                Timber.w(e, "RX write failed")
                 false
             }
         }
@@ -185,7 +187,7 @@ class B54BleManager(private val context: Context) {
                     attempt.set(0)
                     rxCharRef.set(pendingRxRef.get())
                     trySend(Event.Connected)
-                    writeLevel() // first keepalive, now that no descriptor write is pending
+                    write(levelPayload) // first keepalive, now that no descriptor write is pending
                 }
             }
 
@@ -214,12 +216,16 @@ class B54BleManager(private val context: Context) {
         }
         openConnection.get()?.invoke()
 
-        // Keepalive: while connected, write "$l" once per second. writeLevel() no-ops until
-        // rxCharRef is set (CCCD confirmed), so nothing races the descriptor write.
+        // Keepalive: one read request per second (write() no-ops until rxCharRef is set, so
+        // nothing races the descriptor write). Mostly "$l" (keepalive + fresh battery); every
+        // 3rd tick "$b" instead, to refresh the active beam mode for the light-mode field.
+        // One write per tick — no back-to-back writes that could collide on the single-op stack.
         val keepalive = launch {
+            var tick = 0
             while (isActive) {
                 delay(1000)
-                writeLevel()
+                write(if (tick % 3 == 2) beamPayload else levelPayload)
+                tick++
             }
         }
 

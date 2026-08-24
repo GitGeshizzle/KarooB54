@@ -8,6 +8,7 @@ import io.github.gitgeshizzle.karoob54.ble.B54Light
 import io.github.gitgeshizzle.karoob54.ble.isB54ScanResult
 import io.github.gitgeshizzle.karoob54.data.BatteryDataType
 import io.github.gitgeshizzle.karoob54.data.CyclesDataType
+import io.github.gitgeshizzle.karoob54.data.LightModeDataType
 import io.github.gitgeshizzle.karoob54.data.RuntimeDataType
 import io.github.gitgeshizzle.karoob54.data.TemperatureDataType
 import io.github.gitgeshizzle.karoob54.data.VoltageDataType
@@ -47,6 +48,7 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
             VoltageDataType(extension),
             TemperatureDataType(extension),
             CyclesDataType(extension),
+            LightModeDataType(extension),
         )
     }
 
