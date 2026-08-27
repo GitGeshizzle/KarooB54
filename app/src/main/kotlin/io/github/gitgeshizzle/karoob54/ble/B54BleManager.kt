@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -71,8 +72,11 @@ class B54BleManager(private val context: Context) {
             close()
             return@callbackFlow
         }
+        // BALANCED (not LOW_LATENCY): when the Karoo holds several other sensors, an aggressive
+        // scan is one of the worst radio-coexistence offenders — it starves the other links'
+        // radio time. BALANCED still finds the light within a few seconds.
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
             .build()
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -100,10 +104,10 @@ class B54BleManager(private val context: Context) {
      * Connects to [address], enables TX notifications, sends "$l" once per second
      * (keepalive) and emits incoming messages as [Event.Message].
      *
-     * Uses autoConnect = false (direct connect) for aggressive connection parameters, and
-     * reconnects itself on every drop with a short backoff — the B54's watchdog drops any
-     * client that goes quiet, so a fast, self-driven reconnect keeps the field usable across
-     * the frequent disconnects.
+     * Scan-then-connect so the link establishes even when the Karoo's radio is shared with
+     * several other sensors, with a short backoff reconnect on drops. Once connected it
+     * requests CONNECTION_PRIORITY_HIGH so the keepalive keeps beating the light's ~1-2 s
+     * watchdog even on a busy radio.
      */
     fun connect(address: String): Flow<Event> = callbackFlow {
         val device = adapter?.getRemoteDevice(address)
@@ -123,11 +127,12 @@ class B54BleManager(private val context: Context) {
         // Discovered in onServicesDiscovered, promoted to rxCharRef in onDescriptorWrite.
         val pendingRxRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
         val gattRef = java.util.concurrent.atomic.AtomicReference<BluetoothGatt?>(null)
+        val scanCbRef = java.util.concurrent.atomic.AtomicReference<ScanCallback?>(null)
         val active = java.util.concurrent.atomic.AtomicBoolean(true)
         val attempt = java.util.concurrent.atomic.AtomicInteger(0)
 
-        // Write a read request WITH response: a busy stack can't silently drop it (unlike
-        // no-response). All payloads are read requests ($l, $b) — never a set/control command.
+        // Write WITH response: a busy stack can't silently drop it (unlike no-response).
+        // Payloads are reads ($l/$b/$i) or the two gated control writes ($B/$I) — see B54Protocol.
         fun write(bytes: ByteArray): Boolean {
             val gatt = gattRef.get() ?: return false
             val rx = rxCharRef.get() ?: return false
@@ -150,10 +155,14 @@ class B54BleManager(private val context: Context) {
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    Timber.i("GATT connected, discovering services")
+                    // Ask the controller to give this link a short connection interval, so our
+                    // ~1 s keepalive reliably lands within the light's ~1-2 s watchdog even when
+                    // the radio is shared with several other sensors.
+                    val ok = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                    Timber.i("GATT connected (status=${statusName(status)}); priority HIGH requested=$ok; discovering services")
                     gatt.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    Timber.i("GATT disconnected (status=$status)")
+                    Timber.i("GATT disconnected (status=${statusName(status)})")
                     rxCharRef.set(null)
                     pendingRxRef.set(null)
                     gatt.close()
@@ -224,9 +233,37 @@ class B54BleManager(private val context: Context) {
             }
         }
 
+        // Scan-then-connect: when the radio is shared with several other sensors, a blind
+        // connectGatt (direct or autoConnect) fails to grab a connect slot and just hangs. The
+        // light still advertises and a scan finds it in ~1 s, so we scan by address and issue a
+        // *direct* connect the instant we see an advertisement — it lands in the window the light
+        // is actually listening. Then priority HIGH keeps it.
         openConnection.set {
             gattRef.getAndSet(null)?.close()
-            gattRef.set(device.connectGatt(context, false, gattCallback))
+            val scanner = adapter?.bluetoothLeScanner
+            if (scanner == null) {
+                Timber.w("No scanner; cannot connect")
+                return@set
+            }
+            val filters = listOf(ScanFilter.Builder().setDeviceAddress(address).build())
+            val scanSettings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                .build()
+            val scanCb = object : ScanCallback() {
+                override fun onScanResult(callbackType: Int, result: ScanResult) {
+                    val cb = scanCbRef.getAndSet(null) ?: return // already handled this round
+                    scanner.stopScan(cb)
+                    Timber.i("scan hit $address (rssi=${result.rssi}) -> direct connect")
+                    gattRef.set(device.connectGatt(context, false, gattCallback))
+                }
+
+                override fun onScanFailed(errorCode: Int) {
+                    Timber.w("Connect-scan failed: $errorCode")
+                }
+            }
+            scanCbRef.getAndSet(scanCb)?.let { runCatching { scanner.stopScan(it) } }
+            Timber.i("scanning for $address before connect, attempt=${attempt.get()}")
+            scanner.startScan(filters, scanSettings, scanCb)
         }
         openConnection.get()?.invoke()
 
@@ -256,6 +293,7 @@ class B54BleManager(private val context: Context) {
             active.set(false)
             keepalive.cancel()
             outbound.clear()
+            scanCbRef.getAndSet(null)?.let { cb -> runCatching { adapter?.bluetoothLeScanner?.stopScan(cb) } }
             gattRef.getAndSet(null)?.close()
         }
     }
@@ -265,5 +303,16 @@ class B54BleManager(private val context: Context) {
         val NUS_RX: UUID = UUID.fromString(B54Protocol.NUS_RX)
         val NUS_TX: UUID = UUID.fromString(B54Protocol.NUS_TX)
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        /** Human-readable GATT status for logs — the codes that pin down on-bike failures. */
+        private fun statusName(status: Int): String = when (status) {
+            0 -> "SUCCESS(0)"
+            8 -> "CONN_TIMEOUT(8)" // supervision timeout — radio lost the link (contention)
+            19 -> "TERMINATE_PEER_USER(19)" // the light dropped us (its watchdog)
+            22 -> "TERMINATE_LOCAL_HOST(22)"
+            62 -> "CONN_FAIL_ESTABLISH(62)"
+            133 -> "GATT_ERROR(133)" // generic — usually failed to establish under load
+            else -> "status=$status"
+        }
     }
 }

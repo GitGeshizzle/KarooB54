@@ -16,7 +16,9 @@ import io.hammerhead.karooext.models.DeviceEvent
 import io.hammerhead.karooext.models.OnConnectionStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -57,26 +59,44 @@ class B54Light(
     )
 
     fun connect(emitter: Emitter<DeviceEvent>) {
+        var searchingJob: Job? = null
         val job = scope.launch {
             bleManager.connect(address).collect { event ->
                 when (event) {
-                    is B54BleManager.Event.Connected ->
+                    is B54BleManager.Event.Connected -> {
+                        searchingJob?.cancel()
+                        searchingJob = null
                         emitter.onNext(OnConnectionStatus(ConnectionStatus.CONNECTED))
+                    }
                     is B54BleManager.Event.Disconnected -> {
-                        // Clear cached light state until reconnected.
-                        LightModeState.set(null)
-                        LightInfoState.set(null)
-                        emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
+                        // Don't flap on brief drops: our own reconnect usually restores the link
+                        // within seconds, and reporting SEARCHING can trigger a competing scan on
+                        // the Karoo. Keep showing the last value; only report SEARCHING and clear
+                        // the cached state if the outage outlasts the debounce.
+                        if (searchingJob?.isActive != true) {
+                            searchingJob = scope.launch {
+                                delay(SEARCHING_DEBOUNCE_MS)
+                                LightModeState.set(null)
+                                LightInfoState.set(null)
+                                emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
+                            }
+                        }
                     }
                     is B54BleManager.Event.Message ->
                         eventMapper.map(event.text).forEach { emitter.onNext(it) }
                 }
             }
         }
-        emitter.setCancellable { job.cancel() }
+        emitter.setCancellable {
+            searchingJob?.cancel()
+            job.cancel()
+        }
     }
 
     companion object {
+        /** Grace period before a drop is surfaced as SEARCHING (our reconnect usually wins). */
+        private const val SEARCHING_DEBOUNCE_MS = 12_000L
+
         const val PREFIX = "b54light"
     }
 }

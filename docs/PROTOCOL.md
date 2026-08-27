@@ -55,11 +55,15 @@ whose mode matches the current `$B`.
    `$l` once per second keeps the connection alive and yields a continuous `$L` stream.
    Send it **with response** — a busy stack can silently drop write-no-response, which
    starves the keepalive and trips the watchdog.
-3. The light drops the link easily. Use **direct connect** (`autoConnect = false`, for
-   aggressive connection parameters) and **reconnect actively** on every drop (re-issue the
-   connect after a short backoff) rather than relying on the OS auto-reconnect that
-   `autoConnect = true` provides. Send the first keepalive only after the CCCD write is
-   confirmed, so it can't collide with the pending descriptor write.
+3. The light drops the link easily, and when the Karoo's radio is shared with several other
+   sensors a blind `connectGatt` — direct *or* `autoConnect` — just hangs, never getting a
+   connect slot. **Scan-then-connect** instead: scan by address and issue a **direct** connect
+   (`autoConnect = false`) the instant an advertisement is seen, so it lands while the light is
+   actually listening (measured: connects in ~200 ms under contention, vs a long hang for a
+   blind connect). Then request `CONNECTION_PRIORITY_HIGH` so the keepalive keeps beating the
+   ~1–2 s watchdog even when the radio is busy, and **reconnect actively** (re-scan + connect)
+   on every drop. Send the first keepalive only after the CCCD write is confirmed, so it can't
+   collide with the descriptor write.
 
 ## Control commands
 
