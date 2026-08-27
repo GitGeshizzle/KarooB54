@@ -169,8 +169,8 @@ app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
   MainActivity.kt        Settings screen: BLE permissions + automation toggles
   LightAutomation.kt     Pause-dim and ambient-autolight automations
   B54Protocol.kt         ASCII protocol decoder + command builders (unit-tested)
-  ble/B54BleManager.kt   Native android.bluetooth: scan, direct GATT connect, notify,
-                         1 Hz keepalive, active reconnect on drop, command sending
+  ble/B54BleManager.kt   Native android.bluetooth: scan-then-connect, notify, 1 Hz keepalive,
+                         high connection priority, active reconnect on drop, command sending
   ble/B54Light.kt        Device: wires BLE events to the mapper
   ble/B54EventMapper.kt  Decoded messages -> Karoo data points (stateful, unit-tested)
   ble/B54ScanFilter.kt   B54 scan-match rule (unit-tested)
