@@ -42,6 +42,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # Override the action's default ("tools platform-tools"): the obsolete "tools"
+          # package was removed from the SDK repo, so sdkmanager fails to find it. We only
+          # need platform-tools here; platforms/build-tools are installed in the next step.
+          packages: platform-tools
 
       - name: Install SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
