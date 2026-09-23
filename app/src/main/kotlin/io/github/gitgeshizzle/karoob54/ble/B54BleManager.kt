@@ -105,9 +105,11 @@ class B54BleManager(private val context: Context) {
      * (keepalive) and emits incoming messages as [Event.Message].
      *
      * Scan-then-connect so the link establishes even when the Karoo's radio is shared with
-     * several other sensors, with a short backoff reconnect on drops. Once connected it
-     * requests CONNECTION_PRIORITY_HIGH so the keepalive keeps beating the light's ~1-2 s
-     * watchdog even on a busy radio.
+     * several other sensors. A real drop retries quickly (BALANCED scan); once the light proves
+     * absent (e.g. switched off) it backs off to a low-power scan with a growing gap, so hours
+     * without the light barely touch the battery — and it reconnects on its own when the light
+     * returns. Once connected it requests CONNECTION_PRIORITY_HIGH so the keepalive keeps beating
+     * the light's ~1-2 s watchdog even on a busy radio.
      */
     fun connect(address: String): Flow<Event> = callbackFlow {
         val device = adapter?.getRemoteDevice(address)
@@ -128,7 +130,11 @@ class B54BleManager(private val context: Context) {
         val pendingRxRef = java.util.concurrent.atomic.AtomicReference<BluetoothGattCharacteristic?>(null)
         val gattRef = java.util.concurrent.atomic.AtomicReference<BluetoothGatt?>(null)
         val scanCbRef = java.util.concurrent.atomic.AtomicReference<ScanCallback?>(null)
+        val scanTimeoutRef = java.util.concurrent.atomic.AtomicReference<kotlinx.coroutines.Job?>(null)
         val active = java.util.concurrent.atomic.AtomicBoolean(true)
+        // True once the current link reached "connected"; distinguishes a real drop (retry fast)
+        // from a connect attempt that never landed (back off, go low-power).
+        val wasConnected = java.util.concurrent.atomic.AtomicBoolean(false)
         val attempt = java.util.concurrent.atomic.AtomicInteger(0)
 
         // Write WITH response: a busy stack can't silently drop it (unlike no-response).
@@ -142,7 +148,12 @@ class B54BleManager(private val context: Context) {
                 @Suppress("DEPRECATION")
                 rx.value = bytes
                 @Suppress("DEPRECATION")
-                gatt.writeCharacteristic(rx)
+                val ok = gatt.writeCharacteristic(rx)
+                // A false return = the stack was busy and dropped this write (e.g. the previous
+                // with-response write isn't acked yet). A dropped keepalive is what trips the
+                // light's watchdog, so surface it — it tells a watchdog drop from "light off".
+                if (!ok) Timber.w("write dropped (GATT busy): ${String(bytes, Charsets.US_ASCII)}")
+                ok
             } catch (e: Exception) {
                 Timber.w(e, "RX write failed")
                 false
@@ -151,6 +162,20 @@ class B54BleManager(private val context: Context) {
 
         // Forward-declared so onConnectionStateChange can trigger a reconnect.
         val openConnection = java.util.concurrent.atomic.AtomicReference<() -> Unit>(null)
+
+        // A scan round found nothing (light absent / switched off). Count it and retry with a
+        // growing gap (up to 30 s) so a long absence barely touches the radio; the next
+        // openConnection scans low-power. It reconnects on its own once the light is back.
+        fun scheduleAfterMiss() {
+            if (!active.get()) return
+            val n = attempt.incrementAndGet()
+            val backoff = minOf(1000L shl n.coerceAtMost(5), MAX_BACKOFF_MS) // 2,4,8,16,30,30…s
+            Timber.i("scan miss #$n, retry in ${backoff}ms (low power)")
+            launch {
+                delay(backoff)
+                if (active.get()) openConnection.get()?.invoke()
+            }
+        }
 
         val gattCallback = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -163,17 +188,25 @@ class B54BleManager(private val context: Context) {
                     gatt.discoverServices()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Timber.i("GATT disconnected (status=${statusName(status)})")
+                    val dropped = wasConnected.getAndSet(false)
                     rxCharRef.set(null)
                     pendingRxRef.set(null)
                     gatt.close()
                     gattRef.compareAndSet(gatt, null)
                     trySend(Event.Disconnected)
                     if (active.get()) {
-                        val n = attempt.getAndIncrement()
-                        val backoff = minOf(1000L shl n.coerceAtMost(3), 8000L) // 1,2,4,8s cap
-                        launch {
-                            delay(backoff)
-                            if (active.get()) openConnection.get()?.invoke()
+                        if (dropped) {
+                            // A real link drop: the light may still be right here (brief glitch /
+                            // watchdog), so retry quickly and responsively (attempt was reset on
+                            // connect, so this scans balanced). If it's actually gone, the scan
+                            // window will elapse and scheduleAfterMiss() ramps down to low-power.
+                            launch {
+                                delay(RECONNECT_DELAY_MS)
+                                if (active.get()) openConnection.get()?.invoke()
+                            }
+                        } else {
+                            // A connect attempt that never landed — back off (low-power).
+                            scheduleAfterMiss()
                         }
                     }
                 }
@@ -200,6 +233,7 @@ class B54BleManager(private val context: Context) {
                     // No notify path — publish RX and report connected right away.
                     Timber.w("TX/CCCD missing, connecting without notify")
                     attempt.set(0)
+                    wasConnected.set(true)
                     rxCharRef.set(rx)
                     trySend(Event.Connected)
                 }
@@ -208,6 +242,7 @@ class B54BleManager(private val context: Context) {
             override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
                 if (descriptor.uuid == CCCD) {
                     attempt.set(0)
+                    wasConnected.set(true)
                     rxCharRef.set(pendingRxRef.get())
                     trySend(Event.Connected)
                     write(levelPayload) // first keepalive, now that no descriptor write is pending
@@ -239,19 +274,26 @@ class B54BleManager(private val context: Context) {
         // *direct* connect the instant we see an advertisement — it lands in the window the light
         // is actually listening. Then priority HIGH keeps it.
         openConnection.set {
+            wasConnected.set(false)
             gattRef.getAndSet(null)?.close()
+            scanTimeoutRef.getAndSet(null)?.cancel()
             val scanner = adapter?.bluetoothLeScanner
             if (scanner == null) {
                 Timber.w("No scanner; cannot connect")
                 return@set
             }
+            // First attempt scans BALANCED for a quick connect. Once the light has proven absent
+            // (attempt > 0 after scan misses) we drop to LOW_POWER — a much lower radio duty
+            // cycle — so hours of "light switched off" don't drain the Karoo battery.
+            val lowPower = attempt.get() > 0
             val filters = listOf(ScanFilter.Builder().setDeviceAddress(address).build())
             val scanSettings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                .setScanMode(if (lowPower) ScanSettings.SCAN_MODE_LOW_POWER else ScanSettings.SCAN_MODE_BALANCED)
                 .build()
             val scanCb = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     val cb = scanCbRef.getAndSet(null) ?: return // already handled this round
+                    scanTimeoutRef.getAndSet(null)?.cancel()
                     scanner.stopScan(cb)
                     Timber.i("scan hit $address (rssi=${result.rssi}) -> direct connect")
                     gattRef.set(device.connectGatt(context, false, gattCallback))
@@ -262,8 +304,21 @@ class B54BleManager(private val context: Context) {
                 }
             }
             scanCbRef.getAndSet(scanCb)?.let { runCatching { scanner.stopScan(it) } }
-            Timber.i("scanning for $address before connect, attempt=${attempt.get()}")
+            Timber.i("scanning for $address (${if (lowPower) "low-power" else "balanced"}), attempt=${attempt.get()}")
             scanner.startScan(filters, scanSettings, scanCb)
+            // Bounded scan window: a BLE scan left running for minutes goes stale/throttled and
+            // stops delivering hits (seen in the field — a fresh scan connected instantly where a
+            // long-running one never did). If nothing is found in the window, stop and retry via
+            // scheduleAfterMiss(), which both refreshes the scan and backs the radio off.
+            scanTimeoutRef.set(
+                launch {
+                    delay(SCAN_WINDOW_MS)
+                    if (scanCbRef.compareAndSet(scanCb, null)) {
+                        runCatching { scanner.stopScan(scanCb) }
+                        scheduleAfterMiss()
+                    }
+                },
+            )
         }
         openConnection.get()?.invoke()
 
@@ -292,6 +347,7 @@ class B54BleManager(private val context: Context) {
         awaitClose {
             active.set(false)
             keepalive.cancel()
+            scanTimeoutRef.getAndSet(null)?.cancel()
             outbound.clear()
             scanCbRef.getAndSet(null)?.let { cb -> runCatching { adapter?.bluetoothLeScanner?.stopScan(cb) } }
             gattRef.getAndSet(null)?.close()
@@ -303,6 +359,15 @@ class B54BleManager(private val context: Context) {
         val NUS_RX: UUID = UUID.fromString(B54Protocol.NUS_RX)
         val NUS_TX: UUID = UUID.fromString(B54Protocol.NUS_TX)
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        /** Delay before retrying after a real link drop (short — the light is likely still here). */
+        private const val RECONNECT_DELAY_MS = 1_000L
+
+        /** How long one scan round runs before being refreshed/backed off. */
+        private const val SCAN_WINDOW_MS = 20_000L
+
+        /** Cap for the between-rounds backoff while the light stays absent. */
+        private const val MAX_BACKOFF_MS = 30_000L
 
         /** Human-readable GATT status for logs — the codes that pin down on-bike failures. */
         private fun statusName(status: Int): String = when (status) {
