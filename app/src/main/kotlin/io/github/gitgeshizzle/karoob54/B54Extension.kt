@@ -56,11 +56,13 @@ class B54Extension : KarooExtension("b54", BuildConfig.VERSION_NAME) {
 
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG && Timber.forest().none { it is FileLogTree }) {
-            Timber.plant(Timber.DebugTree())
-            // Persistent file log so a failed ride can be diagnosed after the fact — logcat's
-            // ring buffer is long gone by the time the Karoo is back on USB. Pull with:
+        if (Timber.forest().none { it is FileLogTree }) {
+            // logcat is debug-only, but the persistent file log runs in every build: it's how a
+            // failed ride gets diagnosed after the fact (logcat's ring buffer is long gone by the
+            // time the Karoo is back on USB), which matters just as much for end users reporting
+            // connection issues. App-private, size-capped, removed on uninstall. Pull with:
             // adb pull /sdcard/Android/data/<pkg>/files/b54-log.txt
+            if (BuildConfig.DEBUG) Timber.plant(Timber.DebugTree())
             val fileLog = FileLogTree(applicationContext)
             Timber.plant(fileLog)
             Timber.i("=== session start: KarooB54 %s; log at %s ===", BuildConfig.VERSION_NAME, fileLog.path)
