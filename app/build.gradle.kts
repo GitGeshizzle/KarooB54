@@ -25,7 +25,11 @@ fun semverToVersionCode(v: String): Int {
 }
 
 val appVersionName: String = releaseTag ?: "0.1.0-dev"
-val appVersionCode: Int = releaseTag?.let(::semverToVersionCode) ?: 1
+// No tag = local sideloaded dev build: give it a versionCode far above any release, so the
+// Karoo's in-app updater (which compares the release manifest's latestVersionCode against the
+// installed versionCode) never offers to overwrite our dev build with the published release.
+// Tagged release builds keep the real semver-derived code.
+val appVersionCode: Int = releaseTag?.let(::semverToVersionCode) ?: 2_000_000_000
 
 // --- Signing ----------------------------------------------------------------
 // The release APK is signed with a keystore supplied via env vars (CI) or gradle properties
