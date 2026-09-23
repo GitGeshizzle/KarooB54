@@ -169,7 +169,6 @@ app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
   MainActivity.kt        Settings screen: BLE permissions + automation toggles
   LightAutomation.kt     Pause-dim and ambient-autolight automations
   B54Protocol.kt         ASCII protocol decoder + command builders (unit-tested)
-  FileLogTree.kt         Append the extension's logs to a pullable, size-capped file
   ble/B54BleManager.kt   Native android.bluetooth: scan-then-connect, notify, 1 Hz keepalive,
                          high connection priority, active reconnect on drop, command sending
   ble/B54Light.kt        Device: wires BLE events to the mapper
@@ -178,15 +177,6 @@ app/src/main/kotlin/io/github/gitgeshizzle/karoob54/
   data/B54DataTypes.kt   The six data-field definitions
   data/LightMode.kt      Beam-mode labels + shared light state (unit-tested)
 app/src/test/...         JVM unit tests + Robolectric (permission flow)
-```
-
-**Field debugging:** every build appends the extension's log (BLE connect/disconnect with
-status codes, scan hits, keepalive) to an app-private, size-capped file that survives a ride,
-since you can't tether on the bike and logcat's ring buffer is gone by the time you're home.
-Pull it afterwards:
-
-```
-adb pull /sdcard/Android/data/io.github.gitgeshizzle.karoob54/files/b54-log.txt
 ```
 
 ### License & contributing
